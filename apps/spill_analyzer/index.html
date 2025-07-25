@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>12/24 Block Spill Analyzer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap">
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+        }
+
+        .active-btn {
+            background-color: #4f46e5;
+            color: white;
+        }
+
+        .card {
+            background-color: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50">
+    <div class="flex h-screen">
+        <!-- Sidebar -->
+        <div class="w-1/4 bg-white p-8 border-r border-gray-200 overflow-y-auto">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">Spill Analyzer</h1>
+	    <h3 class="text-md  text-gray-800 mb-2">UK 12/24 Block spill</h3>
+            <p class="text-gray-500 mb-8">Upload your CSV data to get started</p>
+
+            <!-- File Upload -->
+            <div class="mb-8">
+                <label for="csvFileInput"
+                    class="w-full flex items-center justify-center px-4 py-3 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:bg-gray-100 transition">
+                    <svg class="w-6 h-6 text-gray-400 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                        xmlns="http://www.w3.org/2000/svg">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M7 16a4 4 0 01-4-4V7a4 4 0 014-4h10a4 4 0 014 4v5a4 4 0 01-4 4H7z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 11v6m0 0l-3-3m3 3l3-3">
+                        </path>
+                    </svg>
+                    <span class="text-gray-600">Drop file or click to upload</span>
+                </label>
+                <input type="file" id="csvFileInput" accept=".csv" class="hidden">
+                <div id="fileInfo" class="mt-3 text-sm text-gray-500 hidden">
+                    File: <span id="fileName" class="font-medium text-gray-700"></span>
+                </div>
+            </div>
+
+            <!-- Configuration -->
+            <div id="configSection" class="hidden">
+                <div class="mb-6">
+                    <label for="profileSelect" class="block text-sm font-medium text-gray-700 mb-2">Profile</label>
+                    <select id="profileSelect"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </select>
+                </div>
+                <div class="mb-6">
+                    <label for="spillHeight" class="block text-sm font-medium text-gray-700 mb-2">Spill Height
+                        Threshold</label>
+                    <input type="number" id="spillHeight" value="0.01" step="0.01" min="0"
+                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                </div>
+                <button id="analyzeBtn"
+                    class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-3 px-6 rounded-lg transition duration-200">
+                    Analyze Spills
+                </button>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="w-5/6 p-8 h-screen overflow-y-auto">
+            <div id="resultsSection" class="hidden">
+                <!-- Stats -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                    <div class="card">
+                        <h3 class="text-lg font-semibold text-gray-500 mb-2">Total Spills</h3>
+                        <p id="totalSpills" class="text-4xl font-bold text-indigo-600">0</p>
+                    </div>
+                    <div class="card">
+                        <h3 class="text-lg font-semibold text-gray-500 mb-2">Spill Events</h3>
+                        <p id="spillEvents" class="text-4xl font-bold text-green-600">0</p>
+                    </div>
+                    <div class="card">
+                        <h3 class="text-lg font-semibold text-gray-500 mb-2">Avg Duration</h3>
+                        <p id="avgDuration" class="text-4xl font-bold text-yellow-500">0h</p>
+                    </div>
+                    <div class="card">
+                        <h3 class="text-lg font-semibold text-gray-500 mb-2">Max Duration</h3>
+                        <p id="maxDuration" class="text-4xl font-bold text-red-600">0h</p>
+                    </div>
+                </div>
+
+                <!-- Charts -->
+                <div class="flex flex-col gap-6 mb-8 w-full">
+                    <div class="lg:col-span-3 card h-96 flex flex-col">
+                        <h3 class="text-xl font-semibold text-gray-800 mb-4">Depth Profile</h3>
+                        <div id="depthChart" class="flex w-full h-full" style="width: 100%; height: 100%"></div>
+                    </div>
+                    <div class="lg:col-span-2 card h-96 flex flex-col">
+                        <div class="flex justify-between items-center mb-4">
+                            <h3 class="text-xl font-semibold text-gray-800">Spill Distribution</h3>
+                            <div id="spillChartTimeframe" class="flex items-center space-x-1">
+                                <button data-timeframe="day"
+                                    class="timeframe-btn active-btn px-3 py-1 text-sm font-medium rounded-md">Day</button>
+                                <button data-timeframe="month"
+                                    class="timeframe-btn px-3 py-1 text-sm font-medium rounded-md">Month</button>
+                                <button data-timeframe="year"
+                                    class="timeframe-btn px-3 py-1 text-sm font-medium rounded-md">Year</button>
+                            </div>
+                        </div>
+                        <div id="spillChart" class="flex-1"></div>
+                    </div>
+                </div>
+
+                <!-- Yearly Stats -->
+                <div class="card mb-8">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4">Yearly Spill Statistics</h3>
+                    <div id="yearlyStats" class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4"></div>
+                </div>
+
+                <!-- Spill Events Table -->
+                <div class="card">
+                    <h3 class="text-xl font-semibold text-gray-800 mb-4">Spill Events Details</h3>
+                    <div class="overflow-x-auto">
+                        <table class="min-w-full table-auto">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-600">Start Time</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-600">End Time</th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-600">Duration (hours)
+                                    </th>
+                                    <th class="px-4 py-3 text-left text-sm font-medium text-gray-600">Spill Count</th>
+                                </tr>
+                            </thead>
+                            <tbody id="spillEventsTable" class="divide-y divide-gray-200">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div id="welcomeMessage" class="text-center mt-32">
+                <h2 class="text-3xl font-bold text-gray-800">Welcome to the Spill Analyzer</h2>
+                <p class="text-gray-500 mt-2">Upload a CSV file to begin your analysis.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Indicator -->
+    <div id="loadingIndicator"
+        class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-8 text-center">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto mb-4"></div>
+            <p id="loadingText" class="text-lg font-medium text-gray-700">Processing...</p>
+            <div id="progressContainer" class="mt-4 hidden">
+                <div class="w-full bg-gray-200 rounded-full h-2.5">
+                    <div id="progressBar" class="bg-indigo-600 h-2.5 rounded-full transition-all duration-300"
+                        style="width: 0%"></div>
+                </div>
+                <p id="progressText" class="text-sm text-gray-600 mt-2">0%</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class SpillCounter{constructor(){this.spillThreshold=null,this.spills=[],this.graphTitles=[],this.graphs={datetime:[]},this.datetimeFormat=null,this.totalRows=0,this.processedRows=0}parseDateTime(e,t=!1){const s=e.slice(0,2),l=e.slice(3,5),n=e.slice(6,10),i=e.slice(11,13),a=e.slice(14,16);return new Date(`${n}/${l}/${s} ${i}:${a}`)}async readProfilesFromCSV(e,t){return new Promise(((s,l)=>{this.graphTitles=[],this.graphs={datetime:[]},this.processedRows=0,Papa.parse(e,{complete:e=>{this.totalRows=e.data.length,this.processAllRows(e.data,t),t(100,"Parsing complete!"),s()},error:e=>{l(new Error(`CSV parsing error: ${e.message}`))},skipEmptyLines:!0})}))}findValue(e,t){for(let s=0;s<e.length;s++){const l=e[s].indexOf(t);if(-1!==l)return{listIndex:s,itemIndex:l,value:t}}return null}processAllRows(e,t){let s=null,l=null,n=null,i=0,a=this.findValue(e,"G_NPROFILES");a&&(i=parseFloat(e[a.listIndex+1][a.itemIndex]));let r=this.findValue(e,"L_PTITLE");r&&(s=r.listIndex+1,l=s+i),r=this.findValue(e,"P_DATETIME"),r&&(n=r.listIndex);let o=e.slice(s,l).map((e=>e[0].trimStart()));this.graphTitles=this.graphTitles.concat(o);const c=e.slice(n+1,e.length),d=c.map((e=>this.parseDateTime(e[0].trimStart())));this.graphs.datetime=[...d],o.forEach((e=>{this.graphs[e]=[]})),c.forEach((e=>{o.forEach(((t,s)=>{const l=parseFloat(e[s+1].trim());isNaN(l)?this.graphs[t].push(0):this.graphs[t].push(l)}))}))}getProfileData(e){const t=[];if(this.graphs[e])for(let s=0;s<this.graphs[e].length;s++)t.push({timestamp:this.graphs.datetime[s],depth:this.graphs[e][s]});return t}analyze(e,t){return this.spillThreshold=e,this.spills=[],this.identifySpills(t),this.calculateSpills(),this.spills}async analyzeAsync(e,t,s){return this.spillThreshold=e,this.spills=[],s(40,"Identifying spill events..."),await this.identifySpillsAsync(t,s),s(70,"Calculating spill counts..."),await new Promise((e=>setTimeout(e,50))),this.calculateSpills(),this.spills}identifySpills(e){let t=!1,s=null;for(let l=0;l<e.length;l++){const n=e[l];if(n.depth>=this.spillThreshold)t||(t=!0,s=n.timestamp);else if(n.depth<this.spillThreshold&&t){const e=(n.timestamp-s)/6e4;this.spills.push({start:s,end:n.timestamp,duration:e,spills:0}),t=!1,s=null}}if(t&&e.length>0){const t=(e[e.length-1].timestamp-s)/6e4;this.spills.push({start:s,end:e[e.length-1].timestamp,duration:t,spills:0})}}async identifySpillsAsync(e,t){let s=!1,l=null,n=0;for(let i=0;i<e.length;i+=1e4){const a=Math.min(i+1e4,e.length);for(let t=i;t<a;t++){const i=e[t];if(i.depth>=this.spillThreshold)s||(s=!0,l=i.timestamp);else if(i.depth<this.spillThreshold&&s){const e=(i.timestamp-l)/6e4;this.spills.push({start:l,end:i.timestamp,duration:e,spills:0}),s=!1,l=null}n++}t(40+Math.round(n/e.length*25),`Processing ${n} of ${e.length} data points...`),await new Promise((e=>setTimeout(e,1)))}if(s&&e.length>0){const t=(e[e.length-1].timestamp-l)/6e4;this.spills.push({start:l,end:e[e.length-1].timestamp,duration:t,spills:0})}}calculateSpills(){let e=null,t=!1,s=!1,l=!1;for(let n=0;n<this.spills.length;n++){const i=this.spills[n];if(!t&&s&&l&&i.start>e&&(l=!1,t=!1,s=!1),t&&s&&!l&&i.start>e&&i.end>e&&(l=!1,t=!1,s=!1),t||l||s){if(t&&s&&!l&&e<i.end&&e>i.start){l=!0,t=!1;const s=(i.end-e)/6e4,[n]=this.getParts(s,1440);0===n?(i.spills+=1,e=new Date(e.getTime()+864e5)):(i.spills+=n,e=new Date(e.getTime()+24*n*60*60*1e3))}}else{i.spills+=1,t=!0,s=!0,e=new Date(i.start.getTime()+432e5);const n=i.duration-720;if(n<=0)continue;const[a,r]=this.getParts(n,1440);0===r&&(l=!1),r>0&&(l=!0,t=!1),0===a?(i.spills+=1,e=new Date(e.getTime()+864e5)):(i.spills+=a,e=new Date(e.getTime()+24*a*60*60*1e3))}}}getParts(e,t){if(0===t)throw new Error("Cannot divide by zero");const s=e/t,l=Math.floor(s);return[l,s-l]}getSpillCounts(){return this.spills.reduce(((e,t)=>e+t.spills),0)}}let spillCounter=new SpillCounter,currentData=null,analysisResults=null;const csvFileInput=document.getElementById("csvFileInput"),fileInfo=document.getElementById("fileInfo"),fileName=document.getElementById("fileName"),configSection=document.getElementById("configSection"),profileSelect=document.getElementById("profileSelect"),spillHeight=document.getElementById("spillHeight"),analyzeBtn=document.getElementById("analyzeBtn"),resultsSection=document.getElementById("resultsSection"),loadingIndicator=document.getElementById("loadingIndicator"),welcomeMessage=document.getElementById("welcomeMessage");function handleFileSelect(e){const t=e.target.files;t.length>0&&processFile(t[0])}async function processFile(e){if(!e.name.toLowerCase().endsWith(".csv"))return void alert("Please select a CSV file");fileName.textContent=e.name,fileInfo.classList.remove("hidden"),welcomeMessage.classList.add("hidden");const t=document.getElementById("loadingText"),s=document.getElementById("progressContainer"),l=document.getElementById("progressBar"),n=document.getElementById("progressText");loadingIndicator.classList.remove("hidden"),t.textContent="Parsing CSV file...",s.classList.remove("hidden");try{spillCounter=new SpillCounter;const s=(e,s)=>{l.style.width=`${e}%`,n.textContent=`${e}% - ${s}`,t.textContent=s};await spillCounter.readProfilesFromCSV(e,s),profileSelect.innerHTML='<option value="">Select a profile...</option>',spillCounter.graphTitles.forEach((e=>{const t=document.createElement("option");t.value=e,t.textContent=e,profileSelect.appendChild(t)})),configSection.classList.remove("hidden"),loadingIndicator.classList.add("hidden")}catch(e){loadingIndicator.classList.add("hidden"),alert("Error processing CSV file: "+e.message),console.error("CSV Processing Error:",e)}}async function analyzeSpills(){const e=profileSelect.value,t=parseFloat(spillHeight.value);if(!e)return void alert("Please select a profile");if(isNaN(t)||t<=0)return void alert("Please enter a valid spill height threshold");const s=document.getElementById("loadingText"),l=document.getElementById("progressContainer"),n=document.getElementById("progressBar"),i=document.getElementById("progressText");loadingIndicator.classList.remove("hidden"),s.textContent="Analyzing spills...",l.classList.remove("hidden"),n.style.width="0%";try{const l=(e,t)=>{n.style.width=`${e}%`,i.textContent=`${e}% - ${t}`,s.textContent=t};l(10,"Extracting profile data..."),await new Promise((e=>setTimeout(e,50))),currentData=spillCounter.getProfileData(e),l(30,"Identifying spill events..."),await new Promise((e=>setTimeout(e,50))),analysisResults=await spillCounter.analyzeAsync(t,currentData,l),l(90,"Preparing visualizations..."),await new Promise((e=>setTimeout(e,50))),resultsSection.classList.remove("hidden"),await displayResults(),l(100,"Analysis complete!"),setTimeout((()=>{loadingIndicator.classList.add("hidden")}),500)}catch(e){loadingIndicator.classList.add("hidden"),alert("Error during analysis: "+e.message),console.error("Analysis Error:",e)}}async function displayResults(){const e=spillCounter.getSpillCounts(),t=analysisResults.length,s=t>0?(analysisResults.reduce(((e,t)=>e+t.duration),0)/t/60).toFixed(1):0,l=t>0?(Math.max(...analysisResults.map((e=>e.duration)))/60).toFixed(1):0;document.getElementById("totalSpills").textContent=e,document.getElementById("spillEvents").textContent=t,document.getElementById("avgDuration").textContent=s+"h",document.getElementById("maxDuration").textContent=l+"h",createDepthChart(),createSpillChart("day"),createYearlyStats(),createSpillEventsTable(),document.querySelectorAll(".timeframe-btn").forEach((e=>{e.addEventListener("click",(e=>{document.querySelectorAll(".timeframe-btn").forEach((e=>e.classList.remove("active-btn"))),e.target.classList.add("active-btn"),createSpillChart(e.target.dataset.timeframe)}))}))}function createDepthChart(){let e=currentData;if(currentData.length>1e4){const t=Math.ceil(currentData.length/1e4);e=currentData.filter(((e,s)=>s%t==0))}const t=e.map((e=>e.timestamp)),s=e.map((e=>e.depth)),l=parseFloat(spillHeight.value),n=[{x:t,y:s,type:"scatter",mode:"lines",name:"Depth",line:{color:"#4f46e5",width:2}},{x:t,y:Array(t.length).fill(l),type:"scatter",mode:"lines",name:"Spill Threshold",line:{color:"#f43f5e",dash:"dash",width:2}}];Plotly.newPlot("depthChart",n,{xaxis:{rangeslider:{visible:!0}},margin:{t:20,r:20,b:60,l:60},showlegend:!0,legend:{orientation:"h",yanchor:"bottom",y:1.02,xanchor:"right",x:1}},{responsive:!0})}function createSpillChart(e="day"){if(0===analysisResults.length)return;const t={};analysisResults.forEach((s=>{const l=s.start;let n;n="day"===e?l.toISOString().split("T")[0]:"month"===e?`${l.getFullYear()}-${(l.getMonth()+1).toString().padStart(2,"0")}`:l.getFullYear().toString(),t[n]||(t[n]=0),t[n]+=s.spills}));const s=[{x:Object.keys(t),y:Object.values(t),type:"bar",name:"Spill Count",marker:{color:"#3b82f6"}}];Plotly.newPlot("spillChart",s,{yaxis:{title:"Spill Count"},margin:{t:20,r:20,b:40,l:60}},{responsive:!0})}function createYearlyStats(){const e={};analysisResults.forEach((t=>{const s=t.start.getFullYear();e[s]||(e[s]=0),e[s]+=t.spills}));const t=document.getElementById("yearlyStats");t.innerHTML="",Object.keys(e).sort().forEach((s=>{const l=document.createElement("div");l.className="bg-indigo-500 text-white rounded-lg p-4 text-center",l.innerHTML=`\n                    <h4 class="text-lg font-semibold">${s}</h4>\n                    <p class="text-2xl font-bold">${e[s]}</p>\n                `,t.appendChild(l)}))}function createSpillEventsTable(){const e=document.getElementById("spillEventsTable");e.innerHTML="",analysisResults.forEach((t=>{const s=document.createElement("tr");s.className="hover:bg-gray-50",s.innerHTML=`\n                    <td class="px-4 py-3 text-sm">${t.start.toLocaleString()}</td>\n                    <td class="px-4 py-3 text-sm">${t.end.toLocaleString()}</td>\n                    <td class="px-4 py-3 text-sm">${(t.duration/60).toFixed(1)}</td>\n                    <td class="px-4 py-3 text-sm font-medium">${t.spills}</td>\n                `,e.appendChild(s)}))}csvFileInput.addEventListener("change",handleFileSelect),analyzeBtn.addEventListener("click",analyzeSpills);
+    </script>
+</body>
+
+</html>
